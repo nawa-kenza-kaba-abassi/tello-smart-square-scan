@@ -1,0 +1,18 @@
+# Journaux automatiques du programme
+Diagnosis/
+
+# Fichiers Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Fichiers compilés en C
+*.exe
+*.o
+*.obj
+
+# Fichiers système et secrets
+.DS_Store
+Thumbs.db
+.env
