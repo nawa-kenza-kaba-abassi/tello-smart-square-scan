@@ -1,0 +1,1 @@
+﻿wall_time,elapsed_ms,waypoint,command,response,status,wire_ms,total_ms,original_delay_s,abort_before,abort_after,uncertain_before,uncertain_after,flight_unknown_before,flight_unknown_after,flying_before,flying_after,telem_age_before_ms,telem_age_after_ms,before_telemetry,after_telemetry,before_path,after_path,exception
