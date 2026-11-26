@@ -99,18 +99,17 @@ BOX_TASK  = 'detect'
 # Edit labels/colours/project wording here. Do not change the safety core below.
 # ═══════════════════════════════════════════════════════════════
 
-# Shared LIGHT base (white background, dark text). Accent colours per theme
-# stay vivid; these neutrals are tuned to read well on white.
-BG        = '#ffffff'   # main window background (white)
-PANEL_BG  = '#eef1f5'   # section-header strips
-CARD_BG   = '#f5f7fa'   # cards / inset panels
-BORDER    = '#d3d9e0'   # light grey borders
-HEADER_BG = '#f0f2f6'   # title bars / header strips (was near-black)
-CANVAS_BG = '#f7f9fb'   # camera + flight-path canvases (was near-black)
-LOG_BG    = '#f4f6f9'   # activity-log background
-C_WHITE   = '#1a1f26'   # PRIMARY TEXT — now dark for white bg (name kept)
-C_MUTED   = '#6b7683'   # secondary/label text
-C_DIM     = '#9aa4b0'   # faint text / grid lines
+# Radar Sage palette for the main dashboard.
+BG        = '#EDF3EF'
+PANEL_BG  = '#DFEBE4'
+CARD_BG   = '#FAFCFA'
+BORDER    = '#88A698'
+HEADER_BG = '#E3EEE8'
+CANVAS_BG = '#F5FAF7'
+LOG_BG    = '#FAFCFA'
+C_WHITE   = '#233A32'   # primary text, legacy constant name
+C_MUTED   = '#4A6157'
+C_DIM     = '#52685E'
 C_BLUE    = '#0277bd'   # info blue (darkened for contrast on white)
 C_GREEN   = '#0a9d5a'   # ok/good (darkened for contrast on white)
 C_AMBER   = '#c77700'   # warning (darkened for contrast on white)
@@ -119,11 +118,11 @@ C_SUBTEXT = '#57606b'   # header question text
 
 THEMES = {
     1: dict(
-        name="SMART SQUARE SCAN",
+        name="Tello Mission Control",
         emoji="[SCAN]",
         question="Can a drone patrol a square path and scan each corner for a box?",
-        accent='#7c5cff', accent2='#00e5ff', glow='#f0ecff',
-        accent_text='#5a3fd6',
+        accent='#4C7262', accent2='#A8C6B6', glow='#304A43',
+        accent_text='#365749',
         default_task='detect', default_model='yolov8n.pt',
         props=["POINT A", "POINT B", "POINT B (2)"],
         waypoint_labels=["START", "POINT A", "POINT B", "POINT C", "START"],
@@ -179,7 +178,7 @@ FONT_MONO    = ('Courier', 10)
 FONT_MONO_S  = ('Courier', 8)
 FONT_MONO_L  = ('Courier', 13, 'bold')
 FONT_MONO_XL = ('Courier', 22, 'bold')
-FONT_LABEL   = ('Courier', 7)
+FONT_LABEL   = ('TkDefaultFont', 8)
 
 
 def bat_color(pct):
@@ -871,9 +870,12 @@ class FlightPathView(tk.Frame):
         self.follow_var = tk.BooleanVar(value=True)
 
         # top-view canvas (expands to fill)
-        self.canvas = tk.Canvas(self, bg=CANVAS_BG, highlightthickness=1,
-                                highlightbackground=accent)
-        self.canvas.pack(fill='both', expand=True, padx=6, pady=(4, 4))
+        self.map_area = tk.Frame(self, bg=BG)
+        self.map_area.pack(fill='both', expand=True, padx=8, pady=4)
+        self.canvas = tk.Canvas(self.map_area, bg=CANVAS_BG,
+                                highlightthickness=1, highlightbackground=accent)
+        if not compact:
+            self.canvas.pack(fill='both', expand=True)
 
         # telemetry strip — explicit X / Y / Z position readout
         strip = tk.Frame(self, bg=BG)
@@ -907,7 +909,7 @@ class FlightPathView(tk.Frame):
         tk.Label(self, text="SIDE VIEW · ALTITUDE", bg=BG, fg=C_MUTED,
                  font=FONT_LABEL, anchor='w').pack(fill='x', padx=6, pady=(4, 0))
         self.alt_canvas = tk.Canvas(self, bg=CANVAS_BG,
-                                    height=60 if compact else 80,
+                                    height=34 if compact else 80,
                                     highlightthickness=1,
                                     highlightbackground=BORDER)
         self.alt_canvas.pack(fill='x', padx=6, pady=(2, 4))
@@ -969,17 +971,25 @@ class FlightPathView(tk.Frame):
         bx0, by0 = to_px(-half, half)
         bx1, by1 = to_px(half, -half)
         c.create_rectangle(bx0, by0, bx1, by1, outline=C_DIM, width=1)
-        for g in range(-100, 101, 50):
-            col = BORDER if g != 0 else '#b0b8c2'
+        for g in range(-100, 101, 20):
+            col = '#DAE5DE' if g != 0 else '#b0b8c2'
             c.create_line(*to_px(g, half), *to_px(g, -half), fill=col)
             c.create_line(*to_px(-half, g), *to_px(half, g), fill=col)
         c.create_text(bx0 + 4, by1 - 9, text="2 m", fill=C_MUTED,
                       font=FONT_LABEL, anchor='w')
 
-        sx, sy = to_px(0, 0)
-        c.create_oval(sx - 5, sy - 5, sx + 5, sy + 5, fill=C_GREEN, outline='')
-        c.create_text(sx + 8, sy - 8, text="START", fill=C_GREEN,
-                      font=FONT_LABEL, anchor='w')
+        checkpoints = [(0, 0, "START"), (0, 60, "A"), (60, 60, "B"), (60, 0, "C")]
+        planned = [value for x, y, _ in checkpoints + checkpoints[:1]
+                   for value in to_px(x, y)]
+        c.create_line(*planned, fill=self.accent, width=2, dash=(4, 3))
+        c.create_text(8, 8, text="Dashed: planned route", anchor="nw",
+                      fill=C_MUTED, font=FONT_LABEL)
+        for x, y, label in checkpoints:
+            px, py = to_px(x, y)
+            c.create_oval(px - 5, py - 5, px + 5, py + 5,
+                          fill=CARD_BG, outline=self.accent, width=2)
+            c.create_text(px + 7, py - 7, text=label, fill=self.accent,
+                          font=FONT_LABEL, anchor='w')
 
         for ex, ey, label in snap['events']:
             px, py = to_px(ex, ey)
@@ -1075,7 +1085,7 @@ class FlightPathWindow(tk.Toplevel):
 
 class TelloThemedPanel(tk.Tk):
 
-    def __init__(self, theme_id=1, group="GROUP 07", students=None):
+    def __init__(self, theme_id=1, group="GROUP 34", students=None):
         super().__init__()
         self.theme_id = theme_id
         self.theme    = THEMES[theme_id]
@@ -1090,13 +1100,12 @@ class TelloThemedPanel(tk.Tk):
             "Engineering Anal. - Student E",
         ]
 
-        self.title(f"TELLO MISSION CONTROL — THEME {theme_id} — {self.theme['name']}")
+        self.title(self.theme["name"])
         self.configure(bg=BG)
         self.resizable(True, True)
         # Fit the laptop screen: size to the available area (minus a margin for
         # the OS taskbar/dock), and keep a small min so it works even on
-        # 1366x768 laptops. All four columns scroll, so content stays reachable
-        # at any size.
+        # 1366x768 laptops. The telemetry and setup column scrolls.
         try:
             sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
             # leave room for taskbar/dock and window chrome
@@ -1191,47 +1200,40 @@ class TelloThemedPanel(tk.Tk):
         self._build_header()
         self._build_titlebar()
 
-        # Four columns: telemetry | camera+setup | flight path | controls+log.
-        # All stretch vertically; the flight path is now ON the main screen.
         body = tk.Frame(self, bg=BG)
         body.pack(fill='both', expand=True)
         body.grid_rowconfigure(0, weight=1)
-        body.grid_columnconfigure(0, weight=0, minsize=170)   # left telemetry (fixed)
-        body.grid_columnconfigure(1, weight=4, minsize=360)   # camera + setup
-        body.grid_columnconfigure(2, weight=3, minsize=240)   # flight path
-        body.grid_columnconfigure(3, weight=1, minsize=340)   # controls + log (wide, stretches)
+        body.grid_columnconfigure(0, minsize=270)
+        body.grid_columnconfigure(1, weight=1, minsize=380)
+        body.grid_columnconfigure(2, minsize=270)
 
-        self._build_left_col(body)     # telemetry + props
-        self._build_mid_col(body)      # camera + YOLO + mission picker
-        self._build_path_col(body)     # embedded live flight path
-        self._build_right_col(body)    # status + controls + log
+        center = tk.Frame(body, bg=BG)
+        center.grid(row=0, column=1, sticky='nsew', padx=4, pady=8)
+        center.columnconfigure((0, 1), weight=1, uniform='views')
+        center.rowconfigure(0, weight=1)
+
+        sidebar = self._build_left_col(body)
+        self._build_mid_col(center, sidebar)
+        self._build_path_col(center)
+        self._build_right_col(body)
+        for area in (self.camera_area, self.path_view.map_area):
+            area.bind('<Configure>', self._resize_square_views)
+
+    def _resize_square_views(self, _event):
+        areas = (self.camera_area, self.path_view.map_area)
+        side = min(min(area.winfo_width(), area.winfo_height()) for area in areas)
+        if side > 1:
+            for canvas in (self.cam_canvas, self.path_view.canvas):
+                canvas.place(relx=0.5, rely=0.5, anchor='center', width=side, height=side)
 
     def _build_header(self):
-        glow = self.theme["glow"]
-        hdr = tk.Frame(self, bg=glow)
-        hdr.pack(fill='x')
-        bar = tk.Frame(self, bg=self.accent, height=3)
-        bar.pack(fill='x')
-
-        left = tk.Frame(hdr, bg=glow)
-        left.pack(side='left', padx=16, pady=8)
-        tk.Label(left, text="PROGRAMMING TECHNIQUES  ·  DJI TELLO MISSION",
-                 bg=glow, fg=C_MUTED, font=FONT_LABEL).pack(anchor='w')
-        tk.Label(left, text=f"{self.theme['emoji']}  THEME {self.theme_id} — {self.theme['name']}",
-                 bg=glow, fg=self.accent_text, font=('Courier', 18, 'bold')).pack(anchor='w')
-        tk.Label(left, text=self.theme["question"],
-                 bg=glow, fg=C_SUBTEXT, font=FONT_MONO_S).pack(anchor='w')
-
-        # group + students box
-        gbox = tk.Frame(hdr, bg=HEADER_BG, highlightbackground=BORDER,
-                        highlightthickness=1)
-        gbox.pack(side='right', padx=16, pady=8)
-        tk.Label(gbox, text=self.group, bg=HEADER_BG, fg=self.accent_text,
-                 font=('Courier', 12, 'bold')).pack(anchor='w', padx=10, pady=(4, 0))
-        for s in self.students:
-            tk.Label(gbox, text=s, bg=HEADER_BG, fg=C_WHITE,
-                     font=FONT_LABEL).pack(anchor='w', padx=10)
-        tk.Frame(gbox, bg=HEADER_BG, height=4).pack()
+        background = self.theme["glow"]
+        header = tk.Frame(self, bg=background, padx=16, pady=10)
+        header.pack(fill='x')
+        tk.Label(header, text=self.theme["name"], bg=background, fg='#FAFCFA',
+                 font=('TkDefaultFont', 18, 'bold')).pack(side='left')
+        tk.Label(header, text=self.group, bg=background, fg='#E5F1E9',
+                 font=('TkDefaultFont', 11, 'bold')).pack(side='right')
 
     def _build_titlebar(self):
         tb = tk.Frame(self, bg=HEADER_BG, highlightbackground=self.accent,
@@ -1267,13 +1269,12 @@ class TelloThemedPanel(tk.Tk):
     # ── LEFT COLUMN: telemetry + props ────────────────────────
 
     def _build_left_col(self, parent):
-        sc = ScrollColumn(parent, fixed_width=170)
+        sc = ScrollColumn(parent, fixed_width=270)
         sc.grid(row=0, column=0, sticky='nsew', padx=(8, 4), pady=8)
         col = sc.body
 
         self._section_hdr(col, "POWER & TELEMETRY")
-        self.gauge = BatteryGauge(col, self.accent, size=130)
-        self.gauge.pack(pady=(4, 6), padx=6)
+        self.battery_card = self._card(col, "BATTERY", "waiting", self.accent_text)
 
         self.eft_card    = self._card(col, "EST. FLIGHT TIME", "waiting", C_GREEN)
         self.timer_card  = self._card(col, "TIME IN AIR",      "00:00",   self.accent_text)
@@ -1298,21 +1299,24 @@ class TelloThemedPanel(tk.Tk):
             tk.Label(row, text='OK', bg=CARD_BG, fg=C_GREEN,
                      font=FONT_LABEL).pack(side='right', padx=8)
 
-    # ── MIDDLE COLUMN: camera + YOLO selector + mission picker ─
+        return col
 
-    def _build_mid_col(self, parent):
-        sc = ScrollColumn(parent)
-        sc.grid(row=0, column=1, sticky='nsew', padx=4, pady=8)
-        col = sc.body
+    # ── CAMERA + PREFLIGHT SETUP ──────────────────────────
+
+    def _build_mid_col(self, parent, sidebar):
+        col = tk.Frame(parent, bg=BG, highlightbackground=self.accent,
+                       highlightthickness=1)
+        col.grid(row=0, column=0, sticky='nsew', padx=(0, 4))
 
         self._section_hdr(col, "LIVE CAMERA · YOLOV8 DETECTION")
         # Camera canvas scales with the window. We track its real size and
         # resize frames to fit, so the feed grows/shrinks as you resize.
-        self.cam_w, self.cam_h = 480, 300
-        self.cam_canvas = tk.Canvas(col, width=self.cam_w, height=self.cam_h,
-                                    bg=CANVAS_BG, highlightthickness=1,
+        self.cam_w = self.cam_h = 160
+        self.camera_area = tk.Frame(col, bg=BG)
+        self.camera_area.pack(fill='both', expand=True, padx=8, pady=4)
+        self.cam_canvas = tk.Canvas(self.camera_area, bg=CANVAS_BG,
+                                    highlightthickness=1,
                                     highlightbackground=self.accent)
-        self.cam_canvas.pack(fill='x', expand=True, padx=8, pady=(4, 2))
         self.cam_canvas.bind('<Configure>', self._on_cam_resize)
         self._show_cam_placeholder()
 
@@ -1338,6 +1342,7 @@ class TelloThemedPanel(tk.Tk):
         self.cam_on_btn.configure(state='normal')
 
         # ── PRE-FLIGHT SETUP: YOLO model + camera test + mission ──
+        col = sidebar
         self._section_hdr(col, "PRE-FLIGHT SETUP")
         setup = tk.Frame(col, bg=BG)
         setup.pack(fill='x', padx=10, pady=(0, 12))
@@ -1416,9 +1421,9 @@ class TelloThemedPanel(tk.Tk):
         head = tk.Frame(wrap, bg=CARD_BG, highlightbackground=BORDER,
                         highlightthickness=1)
         head.pack(fill='x')
-        for text, w in [("WAYPOINT", 16), ("SCAN", 6), ("FOUND", 6),
-                        ("LABEL", 12), ("CONF", 6), ("COLOUR", 8)]:
-            tk.Label(head, text=text, bg=CARD_BG, fg=C_MUTED, font=FONT_LABEL,
+        for text, w in [("POINT", 9), ("SCAN", 5), ("FOUND", 6),
+                        ("LABEL", 8), ("CONF", 5), ("COLOR", 5)]:
+            tk.Label(head, text=text, bg=CARD_BG, fg=C_MUTED, font=FONT_MONO_S,
                      width=w, anchor='w').pack(side='left', padx=2, pady=3)
 
         self.scan_rows_frame = tk.Frame(wrap, bg=BG)
@@ -1464,11 +1469,11 @@ class TelloThemedPanel(tk.Tk):
         row.pack(fill='x', pady=1)
         found = res.get("found")
         cells = [
-            (res.get("waypoint", "-"), 16, C_WHITE),
-            (res.get("scan_dir", "-"), 6, C_MUTED),
+            (res.get("waypoint", "-"), 9, C_WHITE),
+            (res.get("scan_dir", "-"), 5, C_MUTED),
             ("YES" if found else "no", 6, C_GREEN if found else C_RED),
-            (res.get("label") or "-", 12, C_WHITE),
-            (f"{res.get('confidence', 0):.0%}" if found else "-", 6, C_MUTED),
+            (res.get("label") or "-", 8, C_WHITE),
+            (f"{res.get('confidence', 0):.0%}" if found else "-", 5, C_MUTED),
         ]
         for text, w, fg in cells:
             tk.Label(row, text=str(text), bg=BG, fg=fg, font=FONT_MONO_S,
@@ -1650,10 +1655,24 @@ class TelloThemedPanel(tk.Tk):
     def _build_path_col(self, parent):
         col = tk.Frame(parent, bg=BG, highlightbackground=BORDER,
                        highlightthickness=1)
-        col.grid(row=0, column=2, sticky='nsew', padx=4, pady=8)
-        self._section_hdr(col, "LIVE FLIGHT PATH · TOP VIEW (2x2 m)")
+        col.grid(row=0, column=1, sticky='nsew', padx=(4, 0))
+        status_frame = tk.Frame(col, bg=CARD_BG, highlightbackground=BORDER,
+                                highlightthickness=1)
+        status_frame.pack(fill='x', padx=10, pady=(0, 8))
+        tk.Label(status_frame, text='MISSION STATUS', bg=CARD_BG, fg=C_MUTED,
+                 font=FONT_LABEL).pack(anchor='w', padx=8, pady=(5, 0))
+        self.status_main = tk.Label(status_frame, text="NOT CONNECTED",
+                                    bg=CARD_BG, fg=C_MUTED,
+                                    font=('Courier', 12, 'bold'), anchor='w',
+                                    wraplength=340)
+        self.status_main.pack(fill='x', padx=8, pady=(2, 0))
+        self.status_sub = tk.Label(status_frame, text="Connect the drone to begin",
+                                   bg=CARD_BG, fg=C_DIM, font=FONT_MONO_S,
+                                   anchor='w', wraplength=340)
+        self.status_sub.pack(fill='x', padx=8, pady=(0, 8))
+        self._section_hdr(col, "FLIGHT PATH · ESTIMATED POSITION")
         # The embedded flight-path view (same drawing as the pop-out window).
-        self.path_view = FlightPathView(col, self.tracker, self.accent_text,
+        self.path_view = FlightPathView(col, self.tracker, self.accent,
                                         compact=True)
         self.path_view.pack(fill='both', expand=True, padx=6, pady=(4, 8))
         self.path_view.start()      # begins the ~10 fps live redraw loop
@@ -1662,47 +1681,42 @@ class TelloThemedPanel(tk.Tk):
 
     def _build_right_col(self, parent):
         col = tk.Frame(parent, bg=BG, highlightbackground=BORDER,
-                       highlightthickness=1, width=340)
-        col.grid(row=0, column=3, sticky='nsew', padx=(4, 8), pady=8)
+                       highlightthickness=1, width=270)
+        col.grid(row=0, column=2, sticky='nsew', padx=(4, 8), pady=8)
         col.grid_propagate(False)
         col.pack_propagate(False)
 
         self._section_hdr(col, "FLIGHT CONTROL")
 
-        status_frame = tk.Frame(col, bg=CARD_BG, highlightbackground=BORDER,
-                                highlightthickness=1)
-        status_frame.pack(fill='x', padx=10, pady=(0, 8))
-        tk.Label(status_frame, text='STATUS', bg=CARD_BG, fg=C_MUTED,
-                 font=FONT_LABEL).pack(anchor='w', padx=8, pady=(5, 0))
-        self.status_main = tk.Label(status_frame, text="NOT CONNECTED",
-                                    bg=CARD_BG, fg=C_MUTED,
-                                    font=('Courier', 12, 'bold'), anchor='w',
-                                    wraplength=320)
-        self.status_main.pack(fill='x', padx=8, pady=(2, 0))
-        self.status_sub = tk.Label(status_frame, text="Connect the drone to begin",
-                                   bg=CARD_BG, fg=C_DIM, font=FONT_MONO_S,
-                                   anchor='w', wraplength=320)
-        self.status_sub.pack(fill='x', padx=8, pady=(0, 8))
+        def control_group(title, border=BORDER):
+            group = tk.Frame(col, bg=CARD_BG, highlightbackground=border,
+                             highlightthickness=1, padx=6, pady=3)
+            group.pack(fill='x', padx=8, pady=(0, 5))
+            tk.Label(group, text=title, bg=CARD_BG, fg=C_WHITE,
+                     font=FONT_LABEL).pack(anchor='w')
+            return group
 
-        def hud_btn(text, fg, cmd, state='normal'):
-            return tk.Button(col, text=text, bg=CARD_BG, fg=fg,
-                             relief='flat', padx=0, pady=6,
-                             font=('Courier', 12, 'bold'), cursor='hand2',
-                             state=state, command=cmd,
-                             highlightbackground=BORDER, highlightthickness=1)
+        def hud_btn(parent, text, cmd, state='normal', emergency=False):
+            color = '#A82222' if emergency else '#DFEBE4'
+            text_color = 'white' if emergency else self.accent_text
+            button = tk.Button(parent, text=text, bg=color, fg=text_color,
+                               disabledforeground='#F3E9E8' if emergency else '#52685E',
+                               activebackground=color, activeforeground=text_color,
+                               relief='flat', pady=4, font=('TkDefaultFont', 10, 'bold'),
+                               cursor='hand2', state=state, command=cmd)
+            button.pack(fill='x', pady=2)
+            return button
 
-        self.connect_btn = hud_btn("[ CONNECT ]", self.accent_text, self._toggle_connect)
-        self.connect_btn.pack(fill='x', padx=10, pady=(0, 4))
-        self.start_btn = hud_btn("> START MISSION", C_GREEN, self._do_start,
+        emergency = control_group("EMERGENCY STOP", C_RED)
+        self.stop_btn = hud_btn(emergency, "STOP", self._do_stop,
+                                state='disabled', emergency=True)
+        flight = control_group("CONNECTION & MISSION")
+        self.connect_btn = hud_btn(flight, "CONNECT", self._toggle_connect)
+        self.start_btn = hud_btn(flight, "START MISSION", self._do_start,
                                  state='disabled')
-        self.start_btn.pack(fill='x', padx=10, pady=(0, 4))
-        self.stop_btn = hud_btn("[] EMERGENCY STOP", C_RED, self._do_stop,
-                                state='disabled')
-        self.stop_btn.pack(fill='x', padx=10, pady=(0, 4))
-        self.path_btn = hud_btn("◎ ENLARGE PATH", self.accent_text, self._open_path_window)
-        self.path_btn.pack(fill='x', padx=10, pady=(0, 4))
-        self.files_btn = hud_btn("FILES", C_BLUE, self._open_downloads)
-        self.files_btn.pack(fill='x', padx=10, pady=(0, 10))
+        tools = control_group("MAP & FILES")
+        self.path_btn = hud_btn(tools, "ENLARGE PATH", self._open_path_window)
+        self.files_btn = hud_btn(tools, "FILES", self._open_downloads)
 
         tk.Label(col, text='ACTIVITY LOG', bg=BG, fg=C_MUTED,
                  font=FONT_LABEL).pack(anchor='w', padx=10)
@@ -2725,7 +2739,7 @@ class TelloThemedPanel(tk.Tk):
             bat = int(t.get('bat', 0))
         except ValueError:
             bat = 0
-        self.gauge.set(bat)
+        self.battery_card.configure(text=f"{bat}%")
         self.height_card.configure(text=f"{t.get('h', '--')} cm")
         # Sync the flight-path altitude (Z) to the drone's live reported height.
         if 'h' in t:
@@ -2920,7 +2934,7 @@ def pick_theme_dialog():
     return chosen['id']
 
 
-def run(theme_id=None, group="GROUP 07", students=None):
+def run(theme_id=None, group="GROUP 34", students=None):
     """Launch the themed mission control panel."""
     if theme_id is None:
         theme_id = pick_theme_dialog()
@@ -3279,9 +3293,9 @@ TelloThemedPanel._on_close=_diag_panel_close
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Tello themed mission control.")
-    parser.add_argument('--theme', type=int, choices=[1, 2, 3, 4, 5], default=None,
-                        help="Theme number (1-5). Omit to show the picker.")
-    parser.add_argument('--group', type=str, default="GROUP 07",
+    parser.add_argument('--theme', type=int, choices=tuple(THEMES), default=None,
+                        help="Theme number. Omit to show the picker.")
+    parser.add_argument('--group', type=str, default="GROUP 34",
                         help="Group number shown in the header.")
     args = parser.parse_args()
     run(theme_id=args.theme, group=args.group)
